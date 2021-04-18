@@ -1,3 +1,4 @@
+// Seed data provided into the database to work with
 var populateSales = [{
     userName : 'Jai Singh',
     amount   : 2000,
@@ -19,5 +20,5 @@ var populateSales = [{
     date     : new Date('Jan 14, 2021')
 }      
 ]
-
+// Exporting the file 
 module.exports = populateSales;
