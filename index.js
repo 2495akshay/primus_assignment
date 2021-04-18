@@ -1,7 +1,6 @@
 const express       = require("express");
 const mongoose      = require("mongoose");
 const bodyParser    = require('body-parser');
-const dayjs         = require('dayjs');
 const populateSales = require('./src/populate/populate-sales');
 const sales         = require('./src/model/sales.js');
 
@@ -23,41 +22,77 @@ let app = express();
 
 // parse various different custom JSON types as JSON
 app.use(bodyParser.json());
- 
-// // parse some custom thing into a Buffer
-// app.use(bodyParser.raw({ type: 'application/vnd.custom-type' }))
- 
-// // parse an HTML body into a string
-// app.use(bodyParser.text({ type: 'text/html' }))
 
 app.get("/", (req, res) =>{
-    
     res.send("hello");
 })
 
-app.post("/populateData", (req, res) =>{
-    sales.insertMany(populateSales, (err, result)=>{
-        if (err) {
-            res.send(err);
-          } else {
-            res.send(result);
-          }
-    })
+app.post("/sales/populate", async (req, res) => {
+   const insertedData = await sales.insertMany(populateSales);
+   res.send(insertedData);
 })
 
-app.post("/addSales",async (req, res) =>{
+app.post("/sales/create",async (req, res) =>{
    const addedSale = await sales.create(req.body);
-   console.log(addedSale);
    res.send(addedSale);
 })
 
-app.get("/fetchSales",async (req, res)=>{
-    const allSales = await sales.find({});
-    for(let i = 0; i < allSales.length ; i++){
-        let hour = allSales[i].date; 
-        console.log(dayjs(hour));
-        console.log(hour)
+app.get("/sales/:id",async (req, res)=>{
+    const {id} = req.params;
+
+    const groupCondition = {
+        sum: {$sum: 1},
+        amount: {$sum: '$amount'}
+    };
+
+    if (id === 'monthly') {
+        groupCondition._id = {$dayOfMonth: '$date'};
+    } else if (id === 'weekly') {
+        groupCondition._id = {$dayOfWeek: '$date'};
+    } else if (id === 'daily') {
+        groupCondition._id = {$hour: '$date'};
+    } 
+
+    const allSales = await sales.aggregate([
+        {
+            $group: groupCondition
+        },
+        {
+            $sort: {
+                _id: 1
+            }
+        }
+    ]);
+
+    const weekMap = {
+        1: 'Sunday',
+        2: 'Monday',
+        3: 'Tuesday',
+        4: 'Wednesday',
+        5: 'Thursday',
+        6: 'Friday',
+        7: 'Saturday'
     }
+
+    let finalDataToBeSent = [];
+
+    if (id === 'monthly') {
+        for(let i = 0; i <= 31; i++) {
+            const currentDayOfMonth = allSales.find(sale => sale._id === i);
+            finalDataToBeSent.push({day: i, amount: currentDayOfMonth ? currentDayOfMonth.amount : 0});
+        }
+    } else if (id === 'weekly') {
+        finalDataToBeSent = allSales.map(sale => {
+            return ({Day: weekMap[sale._id], amount: sale.amount})
+        });
+    } else if (id === 'daily') {
+        for(let i = 0; i < 24; i++) {
+            const currentHourData = allSales.find(sale => sale._id === i);
+            finalDataToBeSent.push({hour: i, amount: currentHourData ? currentHourData.amount : 0});
+        }
+    } 
+
+    res.send(finalDataToBeSent);
 })
 
 app.listen(port, ()=>{
