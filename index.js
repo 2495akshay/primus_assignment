@@ -23,6 +23,7 @@ let app = express();
 // parse various different custom JSON types as JSON
 app.use(bodyParser.json());
 
+// root API
 app.get("/", (req, res) =>{
     res.send("hello");
 })
